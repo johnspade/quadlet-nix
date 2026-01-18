@@ -751,7 +751,7 @@ in
         Service = serviceConfigDefault // config.serviceConfig;
       } // (if quadlet == { } then { } else { Quadlet = quadlet; });
     in
-    {
+    lib.pipe {
       _serviceName = name;
       _configText = if config.rawConfig != null
         then config.rawConfig
@@ -759,5 +759,9 @@ in
       _autoStart = config.autoStart;
       _autoEscapeRequired = quadletUtils.autoEscapeRequired containerConfig containerOpts;
       ref = "${name}.container";
-    };
+
+      containerConfig.cgroupsMode = lib.mkIf config._rootless (lib.mkDefault "disabled");
+    } [
+      (quadletOptions.applyRootlessConfig config)
+    ];
 }

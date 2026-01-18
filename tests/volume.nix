@@ -25,11 +25,9 @@
     };
   };
   testScript = ''
-    machine.wait_for_unit("default.target")
-    machine.wait_for_unit("default.target", user=user)
-    machine.wait_for_unit("write.service", user=user, timeout=30)
+    machine.wait_for_unit("write.service", user=systemd_user, timeout=30)
 
-    path = f"/home/{user}/foo.txt" if user else "/root/foo.txt"
+    path = f"/home/{podman_user}/foo.txt" if podman_user else "/root/foo.txt"
     machine.wait_for_file(path, timeout=10)
     assert machine.succeed(f"cat {path}").strip() == "262c837a9160"
   '';
