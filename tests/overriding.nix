@@ -9,7 +9,7 @@
     };
     overrides =
       if testType == "rootful" then nixosOverrides
-      else if testType == "rootless" then homeManagerOverrides
+      else if testType == "home-manager" then homeManagerOverrides
       else throw "bad testType";
   in {
     virtualisation.quadlet = {
