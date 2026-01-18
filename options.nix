@@ -1,4 +1,4 @@
-{ lib, quadletUtils }:
+{ lib, quadletUtils, supportRootless }:
 let
   mkOption =
     { property, cli ? null, description ? null, encoders ? null, ... }@attrs: let
@@ -74,6 +74,14 @@ let
       '';
     };
 
+    _rootless = lib.mkOption {
+      internal = true;
+      default = false;
+      description = ''
+        Whether to run rootless under system systemd.
+      '';
+    };
+
     ref = lib.mkOption {
       readOnly = true;
       description = ''
@@ -85,7 +93,15 @@ let
         Using this inside `podmanArgs` will therefore unlikely to work.
       '';
     };
-  };
+  } // (if !supportRootless then { } else {
+    rootlessConfig = {
+      uid = lib.mkOption {
+        type = lib.types.nullOr lib.types.int;
+        default = null;
+        description = "User ID to run rootless podman as";
+      };
+    };
+  });
 
   commonTopLevelOptions = let
     submoduleArgs = { inherit quadletUtils; quadletOptions = self; };
@@ -163,6 +179,18 @@ let
     mkTopLevelOptions = extraOptions: lib.attrsets.unionOfDisjoint commonTopLevelOptions extraOptions;
 
     inherit getAllObjects;
+
+    applyRootlessConfig = prev: cfg: let
+      isEnabled = supportRootless && prev.rootlessConfig.uid != null;
+      ifEnabled = lib.mkIf isEnabled;
+      userService = "user@${toString prev.rootlessConfig.uid}.service";
+    in lib.attrsets.unionOfDisjoint cfg {
+      _rootless = isEnabled;
+      serviceConfig.User = ifEnabled prev.rootlessConfig.uid;
+      unitConfig.Wants = ifEnabled (lib.mkAfter [ "linger-users.service" ]);
+      unitConfig.Requires = ifEnabled (lib.mkAfter [ userService ]);
+      unitConfig.After = ifEnabled (lib.mkAfter [ "linger-users.service" userService ]);
+    };
 
     mkAssertions = extraAssertions: config: let
       containerPodConflicts = lib.lists.intersectLists (lib.attrNames config.containers) (lib.attrNames config.pods);

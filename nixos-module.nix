@@ -15,6 +15,7 @@ let
     autoEscape = config.virtualisation.quadlet.autoEscape;
   };
   quadletOptions = import ./options.nix {
+    supportRootless = true;
     inherit lib quadletUtils;
   };
 in

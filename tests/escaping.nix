@@ -59,12 +59,9 @@
     };
   };
   testScript = ''
-    machine.wait_for_unit("default.target")
-    machine.wait_for_unit("default.target", user=user)
-
-    machine.wait_for_unit("write1.service", user=user, timeout=30)
-    machine.wait_for_unit("write2.service", user=user, timeout=30)
-    machine.wait_for_unit("write3.service", user=user, timeout=30)
+    machine.wait_for_unit("write1.service", user=systemd_user, timeout=30)
+    machine.wait_for_unit("write2.service", user=systemd_user, timeout=30)
+    machine.wait_for_unit("write3.service", user=systemd_user, timeout=30)
 
     machine.wait_for_file("/tmp/foo.txt", timeout=10)
     assert machine.succeed("cat /tmp/foo.txt") == 'aaa bbb $ccc "ddd\n\n '

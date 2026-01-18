@@ -220,7 +220,7 @@ in
         Service = serviceConfigDefault // config.serviceConfig;
       } // (if quadlet == { } then { } else { Quadlet = quadlet; });
     in
-    {
+    lib.pipe {
       _serviceName = "${name}-pod";
       _configText = if config.rawConfig != null
         then config.rawConfig
@@ -228,5 +228,7 @@ in
       _autoEscapeRequired = quadletUtils.autoEscapeRequired podConfig podOpts;
       _autoStart = config.autoStart;
       ref = "${name}.pod";
-    };
+    } [
+      (quadletOptions.applyRootlessConfig config)
+    ];
 }

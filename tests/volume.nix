@@ -25,9 +25,7 @@
     };
   };
   testScript = ''
-    machine.wait_for_unit("default.target")
-    machine.wait_for_unit("default.target", user=user)
-    machine.wait_for_unit("write.service", user=user, timeout=30)
+    machine.wait_for_unit("write.service", user=systemd_user, timeout=30)
 
     path = "${home}/bar.txt"
     machine.wait_for_file(path, timeout=10)

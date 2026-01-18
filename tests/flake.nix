@@ -18,31 +18,36 @@
   outputs =
     { test-config, nixpkgs, home-manager, quadlet-nix, ... }: let
       system = test-config.system;
-      makeTestScript = { user, testScript }: { nodes, ... }: ''
+      makeTestScript = { podmanUser, systemdUser, testScript }: { nodes, ... }: ''
         import json
         from typing import Any, Optional
 
-        user = ${user}
+        podman_user = ${podmanUser}
+        systemd_user = ${systemdUser}
 
         def _run_as_user(command: str, *, user: Optional[str]) -> str:
           if user is not None:
             command = f"sudo -u {user} -- {command}"
           return machine.succeed(command)
 
-        def get_containers(*, user: Optional[str]) -> dict[str, dict[str, Any]]:
+        def get_containers(*, user: Optional[str] = podman_user) -> dict[str, dict[str, Any]]:
           containers = json.loads(_run_as_user("podman ps --format=json", user=user))
           return {name: container for container in containers for name in container["Names"]}
 
-        def get_networks(*, user: Optional[str]) -> dict[str, dict[str, Any]]:
+        def get_networks(*, user: Optional[str] = podman_user) -> dict[str, dict[str, Any]]:
           networks = json.loads(_run_as_user("podman network ls --format=json", user=user))
           return {network["name"]: network for network in networks}
 
-        def get_pods(*, user: Optional[str]) -> dict[str, dict[str, Any]]:
+        def get_pods(*, user: Optional[str] = podman_user) -> dict[str, dict[str, Any]]:
           pods = json.loads(_run_as_user("podman pod ls --format=json", user=user))
           return {pod["Name"]: pod for pod in pods}
 
         def switch_to_specialisation(specialisation: str) -> str:
           return machine.succeed(f"${nodes.machine.system.build.toplevel}/specialisation/{specialisation}/bin/switch-to-configuration test")
+
+        machine.wait_for_unit("default.target", user=None)
+        if systemd_user is not None:
+          machine.wait_for_unit("default.target", user=systemd_user)
 
         ${testScript}
       '';
@@ -59,7 +64,11 @@
         specialisation = testCase.specialisation or (_: { });
       in {
         name = name + "-rootful";
-        testScript = makeTestScript { user = "None"; inherit testScript; };
+        testScript = makeTestScript {
+          systemdUser = "None";
+          podmanUser = "None";
+          inherit testScript;
+        };
 
         node.specialArgs.testType = "rootful";
         nodes.machine = { pkgs, ... }@attrs: {
@@ -69,6 +78,64 @@
           ];
           environment.systemPackages = [ pkgs.curl ];
           specialisation = builtins.mapAttrs (name: value: { configuration = value; }) (specialisation attrs);
+        };
+      };
+
+      runRootlessTest = { name, template, pkgs }: let
+        testCase = makeTestCase template {
+          isHomeManager = false;
+          home = "/home/alice";
+        };
+        testConfig = testCase.testConfig;
+        testScript = testCase.testScript;
+        specialisation = testCase.specialisation or (_: { });
+        patchedTestConfig = let
+          # no objects under these paths
+          # patch by default so we don't miss new types
+          noPatch = [
+            "enable"
+            "autoEscape"
+            "autoUpdate"
+          ];
+          lib = pkgs.lib;
+        in
+          lib.mirrorFunctionArgs testConfig (args: let
+            original = testConfig args;
+            rootlessConfig.virtualisation.quadlet = lib.mapAttrs
+              (_: lib.mapAttrs (_: _: { rootlessConfig.uid = 1357; }))
+              (lib.filterAttrs (n: _: !builtins.elem n noPatch) original.virtualisation.quadlet);
+          in
+            original // {
+              imports = (original.imports or []) ++ [ rootlessConfig ];
+            }
+          );
+      in {
+        name = name + "-rootless";
+        testScript = makeTestScript {
+          systemdUser = "None";
+          podmanUser = "\"alice\"";
+          inherit testScript;
+        };
+
+        node.specialArgs.testType = "rootless";
+        nodes.machine = { pkgs, ... }@attrs: {
+          imports = [
+            quadlet-nix.nixosModules.quadlet
+            patchedTestConfig
+          ];
+          environment.systemPackages = [ pkgs.curl ];
+          specialisation = builtins.mapAttrs (name: value: { configuration = value; }) (specialisation attrs);
+
+          users.users.alice = {
+            uid = 1357;
+            group = "alice";
+            linger = true;
+            autoSubUidGidRange = true;
+            isNormalUser = true;
+          };
+          users.groups.alice = {
+            gid = 2468;
+          };
         };
       };
 
@@ -82,7 +149,11 @@
         specialisation = testCase.specialisation or (_: { });
       in {
         name = name + "-home-manager";
-        testScript = makeTestScript { user = "\"alice\""; inherit testScript; };
+        testScript = makeTestScript {
+          systemdUser = "\"alice\"";
+          podmanUser = "\"alice\"";
+          inherit testScript;
+        };
 
         nodes.machine = { lib, pkgs, ... }@attrs: {
           imports = [
@@ -162,6 +233,7 @@
           ];
           runner = [
             runRootfulTest
+            runRootlessTest
             runHomeManagerTest
           ];
         }));
