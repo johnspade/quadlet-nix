@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
   pull_request:
-  schedule:
-  - cron: '0 16 * * *'  # UTC 16:00 daily
 
 jobs:
   test:
