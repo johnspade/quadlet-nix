@@ -79,7 +79,9 @@ in
           # sd-switch only starts new services with those symlinks.
           ${p._serviceName} = {
             Unit.X-QuadletNixConfigHash = builtins.hashString "sha256" p._configText;
-            Install.WantedBy = if p._autoStart then [ "default.target" ] else [ ];
+            Install.WantedBy =   
+              (if p._autoStart then [ "default.target" ] else [ ]) ++  
+              (if p.unitConfig ? WantedBy then p.unitConfig.WantedBy else [ ]);
           };
         }) allObjects
       ) // {
