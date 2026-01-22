@@ -58,7 +58,9 @@ in
             unitConfig.X-QuadletNixConfigHash = builtins.hashString "sha256" p._configText;
             # systemd recommends multi-user.target over default.target.
             # https://www.freedesktop.org/software/systemd/man/latest/systemd.special.html#default.target
-            wantedBy = if p._autoStart then [ "multi-user.target" ] else [];
+            wantedBy =   
+              (if p._autoStart then [ "multi-user.target" ] else [ ]) ++  
+              (if p.unitConfig ? WantedBy then p.unitConfig.WantedBy else [ ]);
           };
         }) allObjects
       );
